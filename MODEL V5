@@ -52,7 +52,7 @@ A1            <- 0.15
 A2            <- 0.85
 RL_FIRM       <- 0.015
 TFP_GROWTH    <- 1.00
-SIGMA_TFP     <- 0.03
+SIGMA_TFP     <- 0.03   # used only if macro TFP shock block is uncommented
 
 PAYROLL_TAX   <- 0.20
 PROFIT_TAX    <- 0.27
@@ -412,10 +412,14 @@ reset_firm <- function(fi) {
   f_entry_period[fi] <<- 0L   # cleared on reset; set to current period at open
 }
 
-# ── Distance matrix ───────────────────────────────────────────
+# ── Distance matrix (pre-allocated to avoid O(N²) copies each birth period) ─
+# N_MAX is an upper bound on population after MAXT periods of growth.
+# All writes during birth events fill in-place; no matrix copy ever occurs.
 cat("Building distance matrix...\n")
+N_MAX  <- ceiling(N_HH * (1 + POP_GROWTH_RATE)^MAXT * 1.05)
+d_hf   <- matrix(0.0, N_MAX, N_MAX)
 coords <- cbind(hh_x, hh_y)
-d_hf   <- as.matrix(dist(coords))   # N_HH x N_HH
+d_hf[seq_len(N_HH), seq_len(N_HH)] <- as.matrix(dist(coords))
 cat("Done.\n")
 
 # ── Period-1 seed ─────────────────────────────────────────────
@@ -556,17 +560,29 @@ for (period in seq_len(MAXT)) {
     new_M  <- pmax(rnorm(n_births, POP_WEALTH_FRAC * med_M,
                          0.1 * POP_WEALTH_FRAC * med_M), POP_WEALTH_FLOOR)
 
-    # ── Distance matrix (before coordinate arrays grow) ──────────
-    existing_coords <- cbind(hh_x[seq_len(N_HH_old)], hh_y[seq_len(N_HH_old)])
-    new_to_exist    <- matrix(0, nrow = n_births, ncol = N_HH_old)
+    # ── Distance matrix: fill new rows/cols in-place (no matrix copy) ───
+    # For each new birth, compute distances to all prior agents and write
+    # directly into the pre-allocated d_hf. O(n_births * N_HH_old) total.
     for (bi in seq_len(n_births)) {
-      dx <- existing_coords[, 1] - new_coords[bi, 1]
-      dy <- existing_coords[, 2] - new_coords[bi, 2]
-      new_to_exist[bi, ] <- sqrt(dx^2 + dy^2)
+      new_idx  <- N_HH_old + bi
+      # distances to the original N_HH_old households
+      dx_e <- hh_x[seq_len(N_HH_old)] - new_coords[bi, 1]
+      dy_e <- hh_y[seq_len(N_HH_old)] - new_coords[bi, 2]
+      d_e  <- sqrt(dx_e^2 + dy_e^2)
+      d_hf[new_idx, seq_len(N_HH_old)] <- d_e
+      d_hf[seq_len(N_HH_old), new_idx] <- d_e
+      # distances to earlier births in this same batch
+      if (bi > 1L) {
+        for (bj in seq_len(bi - 1L)) {
+          prev_idx <- N_HH_old + bj
+          d_nn <- sqrt((new_coords[bi, 1] - new_coords[bj, 1])^2 +
+                       (new_coords[bi, 2] - new_coords[bj, 2])^2)
+          d_hf[new_idx, prev_idx] <- d_nn
+          d_hf[prev_idx, new_idx] <- d_nn
+        }
+      }
+      # d_hf[new_idx, new_idx] remains 0 (self-distance, pre-filled)
     }
-    new_to_new <- if (n_births > 1) as.matrix(dist(new_coords)) else matrix(0, 1, 1)
-    d_hf <- rbind(cbind(d_hf, t(new_to_exist)),
-                  cbind(new_to_exist, new_to_new))
 
     # ── HH arrays ────────────────────────────────────────────────
     hh_x            <- c(hh_x,            new_coords[, 1])
@@ -1007,7 +1023,7 @@ for (period in seq_len(MAXT)) {
     if (USE_SURPLUS) {
       delta_a      <- pmax(f_a[om] - f_a_prev[om], 0)
       f_w[om]      <- f_w[om] + THETA_W * delta_a * f_w[om]
-      f_w[om]      <- clamp(f_w[om], MIN_WAGE, 50)
+      f_w[om]      <- clamp(f_w[om], MIN_WAGE, MAX_WAGE)
     }
     
     # Store this period's TFP for next period's surplus calculation
@@ -1074,7 +1090,7 @@ for (period in seq_len(MAXT)) {
   if (lg$M >= lg_int) lg$M <- lg$M - lg_int else { lg$L <- lg$L + lg_int - lg$M; lg$M <- 0 }
   lg$interest <- lg_int
   lg$transfer <- transfer_bill
-  lg$deficit  <- transfer_bill + lg_int - lg_tax_now
+  # lg$deficit computed after procurement so lg_g_spend is included
 
 
   # ── Government procurement (smooth fiscal rule) ──────────────
@@ -1110,6 +1126,7 @@ for (period in seq_len(MAXT)) {
     }
     if (lg$M < 0) { lg$L <- lg$L - lg$M; lg$M <- 0 }
   }
+  lg$deficit  <- transfer_bill + lg_int + lg_g_spend - lg_tax_now
 
 
   hh_M <- pmax(hh_M, 0)
@@ -1247,7 +1264,7 @@ for (nm in names(metrics))
   cat(sprintf("%-42s %10s\n", nm, metrics[[nm]]))
 
 
-id<-rnorm(1,mean=10000,sd=39) 
+id <- format(Sys.time(), "%Y%m%d_%H%M%S")
 # ── Save CSV ──────────────────────────────────────────────────
 write.csv(hist, paste(id, "abm_v5_tfp_cyclic_macro_pop.csv"), row.names = FALSE)
 cat("\nMacro panel saved: abm_v5_tfp_cyclic_macro_pop.csv\n")
