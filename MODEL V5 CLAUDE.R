@@ -1,5 +1,5 @@
 # =============================================================================
-# ABM v5 stable2 â€” R port
+# ABM v5 stable2 --” R port
 # IlhÃ©us spatial economy: logistic entry, owner-liability closure,
 # Bolsa FamÃ­lia transfers, pseudo-capital (a as depreciating asset),
 # Laspeyres price index, real boundary from geobr CSV.
@@ -15,11 +15,11 @@ suppressPackageStartupMessages({
 
 set.seed(42)
 
-# â”€â”€ Parameters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-N_HH          <- 2000
+# -”--”- Parameters -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
+N_HH          <- 1000
 MAXT          <- 300
 
-# â”€â”€ Population growth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Population growth -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 # Demographic engine: each period, ceil(N_HH * POP_GROWTH_RATE) new households
 # are born inside the municipality boundary, inheriting a small wealth endowment
 # drawn from the lower tail of the current HH wealth distribution (mimicking
@@ -36,18 +36,18 @@ MIN_WAGE      <- 2
 AS_SCALE       <- 1.0   # animal spirits scale: floor = AS_SCALE * mean(wage)
 ANIMAL_SPIRITS_MIN <- MIN_WAGE  # hard floor of last resort if wages collapse
 THETA         <- 0.6
-ALPHA_S       <- 0.35   # was 0.6 â€” slower sales expectation update damps demand-signal amplification
-LAMBDA_N      <- 0.50   # was 0.95 â€” gradual hiring spreads entry waves over ~4 periods
+ALPHA_S       <- 0.35   # was 0.6 --” slower sales expectation update damps demand-signal amplification
+LAMBDA_N      <- 0.50   # was 0.95 --” gradual hiring spreads entry waves over ~4 periods
 # instead of snapping to target immediately; key fix for oscillations
 MU_PHI        <- 0.02
 MU_MIN        <- 0.01
 MU_MAX        <- 1000
-PHI_W         <- 0.15   # was 0.25 â€” slower wage adjustment reduces wage-price feedback
+PHI_W         <- 0.15   # was 0.25 --” slower wage adjustment reduces wage-price feedback
 
 MAX_WAGE      <- 1000
 LAMBDA0       <- 1e-3
 P_FLOOR       <- 0.1
-GAMMA_MD      <- 0.03     # was 0.05 â€” slower markdown, reduces deflationary spikes
+GAMMA_MD      <- 0.03     # was 0.05 --” slower markdown, reduces deflationary spikes
 A1            <- 0.15
 A2            <- 0.85
 RL_FIRM       <- 0.015
@@ -61,11 +61,11 @@ INCOME_FRAC   <- 0.8
 RL_GOV        <- 0.005
 BF_MEDIAN_FRAC  <- 0.45    # transfer = 45% of median employed wage
 BF_WEALTH_FRAC  <- 6.00    # wealth floor = 6x median wage
-# â”€â”€ Smooth fiscal rule â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Smooth fiscal rule -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 # Government spends G_SHARE of net-of-transfer tax revenue on
 # procurement every period, unconditionally. No threshold, no cap.
 # Funded from lg$M first; deficit-financed if deposits run short.
-# LG_M is a pure state variable â€” its trajectory is an outcome,
+# LG_M is a pure state variable --” its trajectory is an outcome,
 # not a control parameter. Remove LG_M_CAP, LG_G_FRAC, G_TAX_FRAC.
 G_SHARE         <- 0.40    # G = G_SHARE * (tax_rev - transfer_bill)
 # 0.40 gives ~30% of GDP in procurement at
@@ -97,7 +97,7 @@ INV_RATE       <- 0.02
 A_DEPRECIATION <- 0.006
 A_MIN          <- 0.1
 
-# â”€â”€ Wageâ€“productivity linkage (heterodox, non-neoclassical) â”€â”€â”€
+# -”--”- Wage--“productivity linkage (heterodox, non-neoclassical) -”--”--”-
 
 wageperiod <- 1
 priceperiod <- 1
@@ -124,11 +124,11 @@ QUIT_FRICTION  <- 10.0
 QUIT_SIGMA     <- 1.5
 SWITCH_SIGMA   <- 0.5
 ACCEPT_SIGMA   <- 0.1
-COST_PER_M     <- 1e-9
+COST_PER_M     <- 1e-4
 MAX_CONSIDERED <- 30L
 MAX_VISITS     <- 100L
 
-# â”€â”€ Utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Utilities -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 sigmoid   <- function(x) 1 / (1 + exp(-x))
 clamp     <- function(x, lo, hi) pmin(pmax(x, lo), hi)
 ewma_fn   <- function(p, r, a) (1-a)*p + a*r
@@ -158,7 +158,7 @@ spatial_search <- function(d_row, cand, lam0) {
   found
 }
 
-# â”€â”€ Geography: IlhÃ©us boundary from geobr CSV â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Geography: IlhÃ©us boundary from geobr CSV -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 LON0    <- -39.219802
 LAT_C   <- -14.761865
 SCALE_X <- 111320 * cos(LAT_C * pi / 180)
@@ -220,7 +220,7 @@ point_in_muni <- function(x, y) {
   as.logical(st_within(pts, muni_sf, sparse = FALSE)[, 1])
 }
 
-# â”€â”€ Road network definition â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Road network definition -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 roads_ll <- list(
   BR415   = rbind(c(-39.49,-14.43),c(-39.44,-14.52),c(-39.38,-14.60),
                   c(-39.33,-14.65),c(-39.30,-14.68),c(-39.22,-14.78),
@@ -341,7 +341,7 @@ hh_x <- hh_coords[, 1]
 hh_y <- hh_coords[, 2]
 cat(sprintf("  %d HH placed.\n", N_HH))
 
-# â”€â”€ Agent arrays â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Agent arrays -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 # N_SLOTS grows with births: each new HH gets a Vacant firm slot.
 # N_SLOTS_0 records the initial count; used only where a frozen reference
 # is genuinely needed (none currently).
@@ -412,17 +412,18 @@ reset_firm <- function(fi) {
   f_entry_period[fi] <<- 0L   # cleared on reset; set to current period at open
 }
 
-# â”€â”€ Distance matrix (pre-allocated to avoid O(NÂ²) copies each birth period) â”€
+# -”--”- Distance matrix (pre-allocated to avoid O(N-²) copies each birth period) -”-
 # N_MAX is an upper bound on population after MAXT periods of growth.
 # All writes during birth events fill in-place; no matrix copy ever occurs.
 cat("Building distance matrix...\n")
-N_MAX  <- ceiling(N_HH * (1 + POP_GROWTH_RATE)^MAXT * 1.05)
+N_MAX  <- ceiling(N_HH * (1 + POP_GROWTH_RATE)^MAXT * 1.05) + MAXT
+
 d_hf   <- matrix(0.0, N_MAX, N_MAX)
 coords <- cbind(hh_x, hh_y)
 d_hf[seq_len(N_HH), seq_len(N_HH)] <- as.matrix(dist(coords))
 cat("Done.\n")
 
-# â”€â”€ Period-1 seed â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Period-1 seed -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 N_SEED    <- N_HH %/% 50L   # 2% seed rate; 10% caused catastrophic over-entry
 
 openfirms<-f_status=="Open"
@@ -451,13 +452,13 @@ for (fi in seed_slots) {
 }
 cat(sprintf("Seeded %d firms at period 1.\n", N_SEED))
 
-# â”€â”€ Government â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Government -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 lg <- list(M = 500, L = 0, tax_rev = 0, transfer = 0,
            deficit = 0, interest = 0)
 lg_g_spend <- 0
 entry_cooldown_t <- 0L   # counts down after a mass-entry episode
 
-# â”€â”€ History â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- History -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 hist_keys <- c("unemp","wage","price","gdp","hM","fM","rw","gini_hh",
                "total_loans","n_open","n_vacant","n_openings","n_exits",
                "lg_M","lg_L","lg_tax","lg_transfer","lg_deficit","lg_interest",
@@ -472,15 +473,15 @@ hist_keys <- c("unemp","wage","price","gdp","hM","fM","rw","gini_hh",
 hist <- as.data.frame(matrix(0, nrow = MAXT, ncol = length(hist_keys)))
 names(hist) <- hist_keys
 
-# â”€â”€ Price index state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Price index state -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 px_base_q   <- numeric(N_SLOTS)
 px_base_p   <- numeric(N_SLOTS)
 px_base_set <- FALSE
 px_prev_pi  <- 1.0
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# -•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•
 # MAIN LOOP
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# -•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•-•
 for (period in seq_len(MAXT)) {
   
   if (period %% 1 == 0) {
@@ -495,7 +496,7 @@ for (period in seq_len(MAXT)) {
     #print(sum(hh_M>STARTUP_CAPITAL))
   }
   
-  # â”€â”€ A. CLOSURE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- A. CLOSURE -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   n_exits <- 0L
   if (period > 1L) {
     om_mask  <- f_status == "Open"
@@ -535,7 +536,7 @@ for (period in seq_len(MAXT)) {
   openidx <- which(om)
   f_age[om] <- f_age[om] + 1L
   
-  # â”€â”€ A2. POPULATION GROWTH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- A2. POPULATION GROWTH -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   # Births occur every period after burn-in. New entrants are placed inside
   # the municipality using the same density kernel as the original population.
   # Their wealth is drawn from the lower quartile of the current distribution
@@ -560,7 +561,7 @@ for (period in seq_len(MAXT)) {
     new_M  <- pmax(rnorm(n_births, POP_WEALTH_FRAC * med_M,
                          0.1 * POP_WEALTH_FRAC * med_M), POP_WEALTH_FLOOR)
     
-    # â”€â”€ Distance matrix: fill new rows/cols in-place (no matrix copy) â”€â”€â”€
+    # -”--”- Distance matrix: fill new rows/cols in-place (no matrix copy) -”--”--”-
     # For each new birth, compute distances to all prior agents and write
     # directly into the pre-allocated d_hf. O(n_births * N_HH_old) total.
     for (bi in seq_len(n_births)) {
@@ -584,7 +585,7 @@ for (period in seq_len(MAXT)) {
       # d_hf[new_idx, new_idx] remains 0 (self-distance, pre-filled)
     }
     
-    # â”€â”€ HH arrays â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -”--”- HH arrays -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
     hh_x            <- c(hh_x,            new_coords[, 1])
     hh_y            <- c(hh_y,            new_coords[, 2])
     hh_M            <- c(hh_M,            new_M)
@@ -598,7 +599,7 @@ for (period in seq_len(MAXT)) {
     hh_unemp_spells <- c(hh_unemp_spells, integer(n_births))
     hh_emp_spells   <- c(hh_emp_spells,   integer(n_births))
     
-    # â”€â”€ Firm arrays (Vacant slots for new citizens) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -”--”- Firm arrays (Vacant slots for new citizens) -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
     f_x             <- c(f_x,             new_coords[, 1])
     f_y             <- c(f_y,             new_coords[, 2])
     f_status        <- c(f_status,        rep("Vacant", n_births))
@@ -632,23 +633,23 @@ for (period in seq_len(MAXT)) {
     f_OpenPos       <- c(f_OpenPos,       integer(n_births))
     f_entry_period  <- c(f_entry_period,  integer(n_births))
     
-    # â”€â”€ Laspeyres price index state vectors â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -”--”- Laspeyres price index state vectors -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
     # px_base_q and px_base_p must stay co-indexed with firm arrays.
     # New slots have no base-period observation yet (zero = not yet set).
     px_base_q <- c(px_base_q, numeric(n_births))
     px_base_p <- c(px_base_p, numeric(n_births))
     
-    # â”€â”€ Dimension counters â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # -”--”- Dimension counters -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
     N_HH   <- N_HH_old + n_births
     N_SLOTS <- N_HH
   }
   
-  # â”€â”€ B. LOGISTIC ENTRY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- B. LOGISTIC ENTRY -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   # All HH indices up to N_SLOTS (grows with births) are eligible.
   # New citizens have a Vacant firm slot allocated at birth.
   
   
-  # Dynamic startup capital â€” EWMA-smoothed to prevent wild oscillation.
+  # Dynamic startup capital --” EWMA-smoothed to prevent wild oscillation.
   # Target = mean wage bill per firm; falls back to 3x MIN_WAGE when
   # no employment exists yet. Alpha=0.1 means ~10-period adjustment lag.
   {
@@ -657,16 +658,16 @@ for (period in seq_len(MAXT)) {
     mean_hh_M   <- max(mean(hh_M), MIN_WAGE, na.rm = TRUE)
     SC_fallback <- max(mean_hh_M * SC_WEALTH_FRAC, MIN_WAGE * 2)
     SC_target   <- if (length(open_wages) > 0 && length(open_N) > 0)
-      mean(open_wages) * mean(open_N)
+      mean(open_wages) * mean(open_N)*0.7
     else
       SC_fallback
     SC_target <- max(SC_target, SC_fallback, na.rm = TRUE)
     if (!is.finite(SC_target)) SC_target <- SC_fallback
-    STARTUP_CAPITAL <- 0.8 * STARTUP_CAPITAL + 0.2 * SC_target
+    STARTUP_CAPITAL <- 0.7 * STARTUP_CAPITAL + 0.3 * SC_target
   }
   
-  # â”€â”€ GOV_TRANSF update (before labour market so quit decisions use
-  #    current-period transfer as reservation wage) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- GOV_TRANSF update (before labour market so quit decisions use
+  #    current-period transfer as reservation wage) -”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   {
     emp_wages_pre  <- hh_Wage[hh_Employed != 0L]
     median_wage_pre <- if (length(emp_wages_pre) > 0) median(emp_wages_pre) else MIN_WAGE
@@ -738,7 +739,7 @@ for (period in seq_len(MAXT)) {
   openidx <- which(om)
   
   
-  # â”€â”€ ENDOGENOUS ANIMAL SPIRITS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- ENDOGENOUS ANIMAL SPIRITS -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   # Floor on sales expectations scales with mean household income,
   # so firm optimism is anchored to aggregate purchasing power.
   # AS_SCALE controls the sensitivity; 0.5-1.5 is a reasonable range.
@@ -755,7 +756,7 @@ for (period in seq_len(MAXT)) {
   }
   
   
-  # â”€â”€ C. PLANNING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- C. PLANNING -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   if (any(om)) {
     s <- ewma_fn(f_S_hat[om], f_Sold[om], ALPHA_S)
     #s <- pmax(s, ANIMAL_SPIRITS)
@@ -786,7 +787,7 @@ for (period in seq_len(MAXT)) {
     }
   }
   
-  # â”€â”€ D. LABOUR MARKET â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- D. LABOUR MARKET -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   for (i in sample.int(N_HH)) {
     hr  <- which(f_OpenPos > 0L & f_status == "Open")
     cf  <- hh_Employed[i]
@@ -835,7 +836,7 @@ for (period in seq_len(MAXT)) {
   emp_vec <- hh_Employed[hh_Employed > 0L]
   f_N <- tabulate(emp_vec, nbins = N_SLOTS)
   
-  # â”€â”€ E. LAYOFFS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- E. LAYOFFS -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   if (period > 1L) {
     excess_idx <- which(om & (f_N - f_N_des) > 0)
     for (fi in excess_idx) {
@@ -859,14 +860,14 @@ for (period in seq_len(MAXT)) {
   hh_unemp_spells[non_owner_unemp] <- hh_unemp_spells[non_owner_unemp] + 1L
   hh_emp_spells[non_owner_unemp]   <- 0L
   
-  # â”€â”€ F. PRODUCTION & WAGES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- F. PRODUCTION & WAGES -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   f_Y[] <- 0; f_WB[] <- 0; f_Sold[] <- 0
-  # â”€â”€ TFP cyclical growth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- TFP cyclical growth -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   # Common macro shock (70% of variance) creates correlated cycles across
   # all open firms; firm-level idiosyncratic shock (30%) adds dispersion.
   # With TFP_GROWTH=1.000 the multiplicative term is neutral and the
   # pseudo-capital investment block below drives any slow upward drift.
-  # Raise TFP_GROWTH to 1.002â€“1.005 for an explicit positive trend.
+  # Raise TFP_GROWTH to 1.002--“1.005 for an explicit positive trend.
   # if (any(om)) {
   #   macro_eps <- rnorm(1L,          mean = 0, sd = SIGMA_TFP * 0.7)
   #   firm_eps  <- rnorm(sum(om), mean = 0, sd = SIGMA_TFP * 0.3)
@@ -874,7 +875,7 @@ for (period in seq_len(MAXT)) {
   # }
   
   
-  # Pseudo-capital investment â€” diminishing returns to TFP accumulation
+  # Pseudo-capital investment --” diminishing returns to TFP accumulation
   # Gain = I / (denom * f_a[fi]) so that high-productivity firms extract
   # progressively less TFP per unit of investment (Romer 1990).
   # Steady-state: a* = sqrt(I / (denom * A_DEPRECIATION))
@@ -911,7 +912,7 @@ for (period in seq_len(MAXT)) {
     }
   }
   
-  # â”€â”€ G. PRICING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- G. PRICING -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   pr <- which(om & f_Y > 0)
   sr <- which(om & f_Y == 0 & f_Inv > 0)
   
@@ -925,7 +926,7 @@ for (period in seq_len(MAXT)) {
     }
   }
   
-  # â”€â”€ H. FIRM CREDIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- H. FIRM CREDIT -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   neg_idx <- which(om & f_M < 0)
   for (fi in neg_idx) {
     f_L[fi] <- f_L[fi] - f_M[fi]; f_M[fi] <- 0
@@ -933,7 +934,7 @@ for (period in seq_len(MAXT)) {
   f_Int[om] <- f_L[om] * RL_FIRM
   f_M[om]   <- f_M[om] - f_Int[om]
   
-  # â”€â”€ I. GOODS MARKET â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- I. GOODS MARKET -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   # Defensive scrub: any NA/NaN in inventory or price would crash the
   # inner loop. These should not occur after the animal_spirits fix,
   # but guard anyway for robustness.
@@ -969,7 +970,7 @@ for (period in seq_len(MAXT)) {
     hh_C_nominal[hi] <- spent
   }
   
-  # â”€â”€ J. ACCOUNTING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- J. ACCOUNTING -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   f_Rev[om]           <- f_Sold[om] * f_p[om]
   f_Profits_gross[om] <- f_Rev[om] - f_WB[om] - f_Int[om]
   f_payroll_tax[om]   <- f_WB[om] * PAYROLL_TAX
@@ -995,7 +996,7 @@ for (period in seq_len(MAXT)) {
   f_Profits_prev[openidx] <- f_Profits[openidx]
   f_Profits_prev[!om]     <- 0
   
-  # â”€â”€ WAGEâ€“PRODUCTIVITY LINKAGE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- WAGE--“PRODUCTIVITY LINKAGE -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   # Runs after pseudo-capital so wages see the updated f_a values.
   # Both mechanisms are independently switchable via USE_EFF_WAGE / USE_SURPLUS.
   
@@ -1030,7 +1031,7 @@ for (period in seq_len(MAXT)) {
     f_a_prev[om]  <- f_a[om]
     f_a_prev[!om] <- 0
   }
-  # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   
   # Firm cash-flow
   for (fi in openidx)
@@ -1043,7 +1044,7 @@ for (period in seq_len(MAXT)) {
     f_L[fi] <- f_L[fi] - repay; f_M[fi] <- f_M[fi] - repay
   }
   
-  # Bank interest â†’ HH
+  # Bank interest -†’ HH
   firm_int_total <- sum(f_Int[om])
   if (firm_int_total > 0) hh_M <- hh_M + firm_int_total / N_HH
   
@@ -1063,7 +1064,7 @@ for (period in seq_len(MAXT)) {
   
   
   
-  # â”€â”€ K. BOLSA FAMÃLIA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- K. BOLSA FAMÃLIA -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   # Transfer and eligibility both indexed to median employed wage,
   # so real value is maintained as the economy grows or contracts.
   # GOV_TRANSF was already updated before the labour market above.
@@ -1093,10 +1094,10 @@ for (period in seq_len(MAXT)) {
   # lg$deficit computed after procurement so lg_g_spend is included
   
   
-  # â”€â”€ Government procurement (smooth fiscal rule) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- Government procurement (smooth fiscal rule) -”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   # G = G_SHARE * net fiscal revenue, every period, no threshold.
   # Net revenue = tax_rev - transfer_bill (what remains after BF).
-  # Positive net revenue: government is in surplus â†’ spend G_SHARE of it.
+  # Positive net revenue: government is in surplus -†’ spend G_SHARE of it.
   # Zero or negative net revenue: no procurement (avoids pro-cyclical
   # borrowing to spend when the government is already running a deficit
   # purely on transfers). Interest payments already deducted above.
@@ -1131,7 +1132,7 @@ for (period in seq_len(MAXT)) {
   
   hh_M <- pmax(hh_M, 0)
   
-  # â”€â”€ L. RECORD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -”--”- L. RECORD -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
   om_now  <- f_status == "Open"; n_open <- sum(om_now)
   unemp_r <- 1 - sum(hh_Employed != 0L) / N_HH
   aw <- if (n_open > 0) mean(f_w[om_now]) else 0
@@ -1229,22 +1230,22 @@ hist$inflation_ma5 <- stats::filter(hist$inflation,
                                     rep(1/5, 5), sides = 2)
 hist$inflation_ma5[is.na(hist$inflation_ma5)] <- hist$inflation[is.na(hist$inflation_ma5)]
 
-# â”€â”€ TFP diagnostic (post burn-in) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- TFP diagnostic (post burn-in) -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 hist$period <- seq_len(MAXT)
 post <- hist[hist$period > BURN_IN, ]
 lm_a      <- lm(avg_a ~ period, data = post)
 a_slope   <- coef(lm_a)[["period"]]
 a_resid   <- post$avg_a - predict(lm_a)
 a_ac1     <- cor(post$avg_a[-1], post$avg_a[-nrow(post)])
-cat("\nâ”€â”€ TFP diagnostics (post-burn) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€\n")
+cat("\n-”--”- TFP diagnostics (post-burn) -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-\n")
 cat(sprintf("  mean a:        %.4f\n",  mean(post$avg_a)))
 cat(sprintf("  std  a:        %.4f\n",  sd(post$avg_a)))
 cat(sprintf("  trend slope:   %+.6f / period\n", a_slope))
 cat(sprintf("  AC(a, lag=1):  %.3f\n",  a_ac1))
 cat(sprintf("  detrended std: %.4f\n",  sd(a_resid)))
-cat(sprintf("  target: slope â‰ˆ 0, detrended std â‰ˆ 0.015â€“0.030\n"))
+cat(sprintf("  target: slope -‰ˆ 0, detrended std -‰ˆ 0.015--“0.030\n"))
 
-# â”€â”€ Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Summary -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 cat(sprintf("\n%-42s %10s\n", "Metric", "Value"))
 cat(strrep("-", 54), "\n")
 metrics <- list(
@@ -1265,11 +1266,11 @@ for (nm in names(metrics))
 
 
 id <- format(Sys.time(), "%Y%m%d_%H%M%S")
-# â”€â”€ Save CSV â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Save CSV -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 write.csv(hist, paste(id, "abm_v5_tfp_cyclic_macro_pop.csv"), row.names = FALSE)
 cat("\nMacro panel saved: abm_v5_tfp_cyclic_macro_pop.csv\n")
 
-# â”€â”€ HH cross-section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- HH cross-section -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 hh_out <- data.frame(
   hh_id        = seq_len(N_HH),
   x            = round(hh_x, 2),
@@ -1286,7 +1287,7 @@ hh_out <- data.frame(
 write.csv(hh_out, paste(id,"abm_v5_tfp_cyclic_hh_final_pop.csv"), row.names = FALSE)
 cat("HH cross-section saved: abm_v5_tfp_cyclic_hh_final_pop.csv\n")
 
-# â”€â”€ Basic plots â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Basic plots -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 periods <- seq_len(MAXT)
 
 png(paste(id,"abm_v5_tfp_cyclic_overview.png"), width = 1400, height = 1500, res = 120)
@@ -1332,7 +1333,7 @@ plot(periods[RANGE], hist$avg_a[RANGE], type="l", col="red", lwd=2,
 abline(h=1, lty=3)
 
 plot(periods[RANGE], hist$inv_total[RANGE], type="l", col="steelblue", lwd=2,
-     main="Investment (I â†’ workers)", xlab="Period", ylab="currency units")
+     main="Investment (I -†’ workers)", xlab="Period", ylab="currency units")
 
 plot(periods[RANGE], hist$n_hh[RANGE], type="l", col="darkgreen", lwd=2,
      main="Population (N_HH)", xlab="Period", ylab="# households")
@@ -1344,7 +1345,7 @@ plot(periods[RANGE], hist$n_births[RANGE], type="h", col="seagreen",
 plot(periods[RANGE], hist$unemp[RANGE]*hist$n_hh[RANGE], type="l", col="red", lwd=2,
      main="Unemployed (headcount)", xlab="Period", ylab="# persons")
 
-# â”€â”€ Firm age panels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -”--”- Firm age panels -”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”--”-
 plot(periods[RANGE], hist$mean_firm_age[RANGE], type="l", col="chocolate", lwd=2,
      main="Mean Firm Age (periods)", xlab="Period", ylab="periods")
 lines(periods[RANGE], hist$med_firm_age[RANGE], col="chocolate4", lwd=2, lty=2)
@@ -1352,7 +1353,7 @@ legend("topleft", c("mean","median"), col=c("chocolate","chocolate4"),
        lwd=2, lty=c(1,2), cex=0.7, bty="n")
 
 plot(periods[RANGE], hist$share_young_firms[RANGE]*100, type="l", col="coral", lwd=2,
-     main="Young Firms (age â‰¤ 12, %)", xlab="Period", ylab="%",
+     main="Young Firms (age -‰¤ 12, %)", xlab="Period", ylab="%",
      ylim=c(0, 100))
 abline(h=50, lty=3, col="grey60")
 
