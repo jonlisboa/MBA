@@ -416,7 +416,7 @@ reset_firm <- function(fi) {
 # N_MAX is an upper bound on population after MAXT periods of growth.
 # All writes during birth events fill in-place; no matrix copy ever occurs.
 cat("Building distance matrix...\n")
-N_MAX  <- ceiling(N_HH * (1 + POP_GROWTH_RATE)^MAXT * 1.05)
+N_MAX  <- ceiling(N_HH * (1 + POP_GROWTH_RATE)^MAXT * 1.05) + MAXT
 d_hf   <- matrix(0.0, N_MAX, N_MAX)
 coords <- cbind(hh_x, hh_y)
 d_hf[seq_len(N_HH), seq_len(N_HH)] <- as.matrix(dist(coords))
