@@ -67,7 +67,7 @@ BF_WEALTH_FRAC  <- 6.00    # wealth floor = 6x median wage
 # Funded from lg$M first; deficit-financed if deposits run short.
 # LG_M is a pure state variable --” its trajectory is an outcome,
 # not a control parameter. Remove LG_M_CAP, LG_G_FRAC, G_TAX_FRAC.
-G_SHARE         <- 0.40    # G = G_SHARE * (tax_rev - transfer_bill)
+G_SHARE         <- 0.90    # G = G_SHARE * (tax_rev - transfer_bill)
 # 0.40 gives ~30% of GDP in procurement at
 # current tax/GDP ratios; adjust to calibrate
 
@@ -81,20 +81,20 @@ BETA_GAIN         <-  0.10
 BETA_USPELLS      <-  0.15
 BETA_ESPELLS      <- -0.04
 USPELLS_CAP       <- 20L    # logit saturation: spells beyond 20 add no further push
-ENTRY_RATE_CAP    <- 0.01   # max new firms per period as fraction of N_HH (~1%)
+ENTRY_RATE_CAP    <- 0.03   # max new firms per period as fraction of N_HH (~1%)
 ENTRY_COOLDOWN    <- 8L     # periods of reduced entry after a mass-entry episode;
 # after n_openings >= ENTRY_RATE_CAP*N_HH, cap halves
 # for ENTRY_COOLDOWN periods to dampen the step-function
 # transition from trap to full-employment
 BETA_SAT          <- -0.05
 SIGMA_W           <-  0.10
-SAT_RADIUS        <-  2000.0
+SAT_RADIUS        <-  10000
 OWNER_PROFIT_SHARE <- 0.15
 M_DIST_RATE       <- 0.2
-M_DIST_PERIOD     <- 12L
+M_DIST_PERIOD     <- 3000L
 
-INV_RATE       <- 0.02
-A_DEPRECIATION <- 0.006
+INV_RATE       <- 0.03
+A_DEPRECIATION <- 0.005
 A_MIN          <- 0.1
 
 # -”--”- Wage--“productivity linkage (heterodox, non-neoclassical) -”--”--”-
@@ -124,7 +124,7 @@ QUIT_FRICTION  <- 10.0
 QUIT_SIGMA     <- 1.5
 SWITCH_SIGMA   <- 0.5
 ACCEPT_SIGMA   <- 0.1
-COST_PER_M     <- 1e-4
+COST_PER_M     <- 1e-3
 MAX_CONSIDERED <- 30L
 MAX_VISITS     <- 100L
 
@@ -487,8 +487,8 @@ for (period in seq_len(MAXT)) {
   if (period %% 1 == 0) {
     n_om  <- sum(f_status == "Open")
     u_now <- 1 - sum(hh_Employed != 0L) / N_HH
-    cat(sprintf("t=%3d | open=%3d | u=%.1f%% | HH_M=%.0f | LG_M=%.0f LG_L=%.0f | STARTUP CAPITAL= %.0f | Mean M = %0.f | Eligible Entrep. = %0.f\n",
-                period, n_om, u_now*100, sum(hh_M), lg$M, lg$L,STARTUP_CAPITAL,mean(hh_M),sum(hh_M>STARTUP_CAPITAL)))
+    cat(sprintf("t=%3d | open=%3d | u=%.1f%% | HH_M=%.0f | F_M=%.0f| LG_M=%.0f LG_L=%.0f | STARTUP CAPITAL= %.0f | Mean M = %0.f | Eligible Entrep. = %0.f\n",
+                period, n_om, u_now*100, sum(hh_M), sum(f_M), lg$M, lg$L,STARTUP_CAPITAL,mean(hh_M),sum(hh_M>STARTUP_CAPITAL)))
     
     
     #print(STARTUP_CAPITAL)
@@ -663,7 +663,7 @@ for (period in seq_len(MAXT)) {
       SC_fallback
     SC_target <- max(SC_target, SC_fallback, na.rm = TRUE)
     if (!is.finite(SC_target)) SC_target <- SC_fallback
-    STARTUP_CAPITAL <- 0.7 * STARTUP_CAPITAL + 0.3 * SC_target
+    STARTUP_CAPITAL <- 0.6 * STARTUP_CAPITAL + 0.4 * SC_target
   }
   
   # -”--”- GOV_TRANSF update (before labour market so quit decisions use
