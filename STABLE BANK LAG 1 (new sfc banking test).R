@@ -101,7 +101,7 @@ BF_WEALTH_FRAC  <- 4.00    # wealth floor = 4x median wage
 # G_SHARE and FISCAL_EWMA_TAU are shared across both modes.
 # Toggle is a clean treatment variable for Monte Carlo factorial design.
 FISCAL_STABILIZER <- TRUE
-G_SHARE           <- 0.3
+G_SHARE           <- 0.80
 FISCAL_EWMA_TAU   <- 20    # smoothing horizon (periods); alpha = 1/tau
 
 STARTUP_CAPITAL   <- 15
@@ -134,7 +134,7 @@ ENTRY_COOLDOWN    <- 5L
 CLOSURE_GRACE     <- 3L      # periods before closure rule applies
 ALPHA_PROF        <- 0.10   # EWMA weight (~4-period memory)
 LOSS_MULT         <- 0.2    # close if smoothed loss > 20% of wage bill
-BETA_SAT          <- -0.06 #CHANGED FROM -0.05
+BETA_SAT          <- -0.06 #CHANGED FROM 0.05
 SIGMA_W           <-  0.10
 SAT_RADIUS        <-  10000
 OWNER_PROFIT_SHARE <- 0.40
@@ -528,8 +528,8 @@ cat(sprintf("Bank seeded: NW=%.0f, total seed loans=%.0f, headroom=%.0f\n",
             bank_NW, sum(f_L), max(0, bank_NW / CAR_MIN - sum(f_L))))
 
 # ----- Government ----------------------------------------------------------
-lg <- list(M = 100000, L = 0, tax_rev = 0, transfer = 0,
-           deficit = 0, interest = 0) #lg$M
+lg <- list(M = 500, L = 0, tax_rev = 0, transfer = 0,
+           deficit = 0, interest = 0)
 lg_g_spend <- 0
 entry_cooldown_t <- 0L   # counts down after a mass-entry episode
 
@@ -1319,28 +1319,27 @@ for (period in seq_len(MAXT)) {
     if (shortfall > 0) f_L[fi] <- f_L[fi] + shortfall  # capitalised interest
   }
 
-  # Bank dividends — distribute net interest income to HH every period
-  # bank_profit = loan interest received - deposit interest paid
-  # (bad debt already hit bank_NW in closure block A)
-  bank_profit_period  <- bank_loan_int_total - bank_dep_int_total
+  # ---- Bank profit accounting (SFC consistent) -----------------------------
+  
+  # Net interest income
+  bank_profit_period <- bank_loan_int_total - bank_dep_int_total
+  
+  # Profit split
   bank_dividend_period <- max(0, bank_profit_period) * BANK_DIV_RATE
+  bank_retained_period <- bank_profit_period - bank_dividend_period
+  
+  # Update bank equity with retained earnings
+  bank_NW <- bank_NW + bank_retained_period
+  
+  # Distribute dividends to households
   if (bank_dividend_period > 0 && N_HH > 0) {
-    hh_M    <- hh_M + bank_dividend_period / N_HH   # deposit liability ↑
-    bank_NW <- bank_NW - bank_dividend_period        # equity ↓
+    hh_M <- hh_M + bank_dividend_period / N_HH
   }
-
-  # M distribution
-  f_m_dist[] <- 0; total_m_dist <- 0
-  if (period %% M_DIST_PERIOD == 0) {
-    for (fi in openidx) {
-      if (f_M[fi] <= 0) next
-      wks <- which(hh_Employed == fi)
-      if (length(wks) == 0) next
-      pool <- f_M[fi] * M_DIST_RATE
-      f_m_dist[fi] <- pool; f_M[fi] <- f_M[fi] - pool
-      hh_M[wks] <- hh_M[wks] + pool / length(wks)
-      total_m_dist <- total_m_dist + pool
-    }
+  
+  # Bank operational spending (reinject retained earnings)
+  # This prevents liquidity leakage from the private sector
+  if (bank_retained_period > 0 && N_HH > 0) {
+    hh_M <- hh_M + bank_retained_period / N_HH
   }
 
   # ----- K. BOLSA FAMILIA --------------------------------------------------

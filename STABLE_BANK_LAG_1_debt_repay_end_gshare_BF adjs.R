@@ -30,6 +30,22 @@ MAXT          <- 300
 # N_HH is updated dynamically; all HH arrays grow accordingly.
 # Set POP_GROWTH_RATE <- 0 to disable without changing anything else.
 GOV_TRANSF    <- 5
+# ----- Bolsa Família inflation correction rule -----------------------------
+# GOV_TRANSF is fixed in nominal terms each period (no wage-tracking).
+# Every BF_INFL_FREQ periods, if cumulative inflation since the last
+# correction exceeds zero, the transfer is partially uprated to restore
+# real purchasing power. The nominal transfer NEVER falls (downward
+# rigidity): deflation leaves GOV_TRANSF unchanged, improving real value.
+# GOV_TRANSF_BASE is a hard floor — the transfer never drops below it.
+#
+# Glossary:
+#   GOV_TRANSF_BASE  : nominal floor (never breached downward)
+#   BF_INFL_PASSTHRU : θ, fraction of cumulative inflation passed through (0–1)
+#   BF_INFL_FREQ     : κ, periods between corrections (12 = annual)
+#   bf_last_pi       : price index at last correction (state variable)
+GOV_TRANSF_BASE  <- 5       # hard nominal floor
+BF_INFL_PASSTHRU <- 0.50    # 50% pass-through of cumulative inflation
+BF_INFL_FREQ     <- 12L     # correct every 12 periods
 POP_GROWTH_RATE  <- 0.000        # ~0.1% per period
 # SFC birth endowment: each parent transfers HERITAGE_FRAC of their wealth.
 # Total endowment = 2 * HERITAGE_FRAC * mean(parental wealth).
@@ -59,7 +75,7 @@ GAMMA_MD      <- 0.03     # was 0.05 --� slower markdown, reduces deflationary
 # and keeps demand from over-reacting to wealth fluctuations.
 A1            <- 0.1 #from 0.04
 A2            <- 0.85
-RL_FIRM       <- 0.015
+RL_FIRM       <- 0.01
 # ----- Banking sector (endogenous money, Godley & Lavoie 2007, ch.7-11) --
 # Single bank, endogenous money creation. Credit creates deposits.
 # SFC mechanics:
@@ -75,10 +91,19 @@ RL_FIRM       <- 0.015
 #             Minsky (1986) ch.9; Nikolaidi & Stockhammer (2017).
 RD               <- 0.001    # deposit interest rate (per period)
 CAR_MIN          <- 0.08     # minimum capital adequacy ratio (Basel-like)
-LOAN_MATURITY    <- 30L      # amortisation horizon (periods to full repayment)
+LOAN_MATURITY    <- 50L      # amortisation horizon (periods to full repayment)
 STARTUP_LEVERAGE <- 1.0      # bank matches owner equity 1:1 at entry
-BANK_NW_INIT_MULT <- 3.0    # initial bank_NW = mult * N_SEED * STARTUP_CAPITAL
+BANK_NW_INIT_MULT <- 20    # initial bank_NW = mult * N_SEED * STARTUP_CAPITAL
 BANK_DIV_RATE    <- 0.50     # fraction of period net interest income distributed
+# Minimum bank equity before dividends are suspended.
+# Below this threshold the bank retains all profit to rebuild capital,
+# mimicking Basel III Pillar 2 supervisory dividend restrictions.
+# At BANK_NW_FLOOR=0, dividends are always paid (original behaviour).
+# BANK_NW_FLOOR is a clean Monte Carlo treatment variable: higher values
+# make the bank more conservative, build equity faster, and widen the
+# CAR lending headroom — at the cost of lower household dividend income.
+# Rule of thumb: set to ~10% of mean outstanding firm loans.
+BANK_NW_FLOOR    <- 2500     # suspend dividends if bank_NW falls below this
 PAYROLL_TAX   <- 0.10
 PROFIT_TAX    <- 0.27
 WEALTH_FLOOR  <- 10        # overridden dynamically each period
@@ -101,24 +126,60 @@ BF_WEALTH_FRAC  <- 4.00    # wealth floor = 4x median wage
 # G_SHARE and FISCAL_EWMA_TAU are shared across both modes.
 # Toggle is a clean treatment variable for Monte Carlo factorial design.
 FISCAL_STABILIZER <- TRUE
-G_SHARE           <- 0.3
 FISCAL_EWMA_TAU   <- 20    # smoothing horizon (periods); alpha = 1/tau
+# ----- Endogenous G_SHARE (fiscal buffer targeting) ------------------------
+# G_SHARE adjusts each period toward a desired lg$M cash buffer.
+# When lg$M > LG_M_TARGET the government has excess cash → G_SHARE rises
+# → more procurement → cash drawn down. When lg$M < LG_M_TARGET the
+# government is cash-constrained → G_SHARE falls → less borrowing needed.
+# This replaces the fixed G_SHARE and resolves the cash-hoarding failure
+# mode (G30) and the perpetual-deficit failure mode (G80) simultaneously.
+#
+# Mechanism (stock-flow norm, Godley & Lavoie 2007 ch.3):
+#   adj_t = G_SHARE_PHI * (lg$M_t - LG_M_TARGET) / (tax_rev_smooth_t + 1)
+#   G_SHARE_t = clamp(G_SHARE_{t-1} + adj_t, G_SHARE_MIN, G_SHARE_MAX)
+#
+# Glossary:
+#   G_SHARE_INIT     : starting value; model converges away from it quickly
+#   G_SHARE_MIN/MAX  : bounds preventing degenerate fiscal stances
+#   G_SHARE_PHI      : adjustment speed (0.05-0.15; higher = faster reversion)
+#   M_LG_TARGET_MULT : desired buffer as multiple of one period's transfer bill
+G_SHARE_INIT      <- 0.60   # starting value
+G_SHARE_MIN       <- 0.4   # floor: always some procurement
+G_SHARE_MAX       <- 0.90   # ceiling: bounded by revenue capacity
+G_SHARE_PHI       <- 0.15   # adjustment speed
+M_LG_TARGET_MULT  <- 1    # target buffer = 2x one period's transfer bill
+# ----- Sovereign debt repayment rule ---------------------------------------
+# When lg$M exceeds LG_DEBT_FLOOR, the government retires a fraction
+# LG_AMORT_RATE of outstanding lg$L each period (smooth amortisation).
+# SFC mechanics: lg$M ↓, lg$L ↓ by equal amount → money destroyed,
+# bank_R and bank_NW unchanged (symmetric balance sheet contraction).
+# This prevents lg$L from accumulating without bound under chronic deficits
+# while preserving countercyclical capacity: in downturns lg$M falls below
+# LG_DEBT_FLOOR, repayment halts, and the stabiliser operates freely.
+# LG_DEBT_FLOOR: minimum cash buffer (one period's transfer bill at ~20%
+#   qualifying rate; keeps the government solvent through spending peaks).
+# LG_AMORT_RATE: fraction of lg$L retired per period when funded (2-5%).
+#   At 0.02, a debt stock of 300k shrinks by ~6k/period when surpluses allow.
+#   Interpretable as a fiscal sustainability parameter for Monte Carlo design.
+LG_DEBT_FLOOR  <- GOV_TRANSF * N_HH * 0.25   # ~25% of max transfer bill
+LG_AMORT_RATE  <- 0.005                         # 2% of outstanding debt/period
 
 STARTUP_CAPITAL   <- 15
-SC_WEALTH_FRAC    <- 0.15   # was 0.50 — entry barrier at 25% of mean hH wealth
+SC_WEALTH_FRAC    <- 0.25   # was 0.50 — entry barrier at 25% of mean hH wealth
 # Hard floor for STARTUP_CAPITAL: SC >= SC_FLOOR_TRANSF_MULT * GOV_TRANSF.
 # Prevents SC from collapsing in downturns and triggering entry explosions.
 # At GOV_TRANSF≈5 and mult=8: floor=40. Raise mult to tighten entry.
 SC_FLOOR_TRANSF_MULT <- 6 #from 8
-INTERCEPT_OPEN    <- -4.0 #CHANGED FROM -6.25
-BETA_M            <-  0.04 #from 0.03
+INTERCEPT_OPEN    <- -12 #CHANGED FROM -6.25
+BETA_M            <-  0.1 #from 0.03
 BETA_UNEMP        <-  1.8
 BETA_GAIN         <-  0.10
 BETA_USPELLS      <-  0.15
 BETA_ESPELLS      <- -0.07
 USPELLS_CAP       <- 20L    # logit saturation: spells beyond 20 add no further push
-ENTRY_RATE_CAP    <- 0.05   # max new firms per period as fraction of N_HH
-ENTRY_COOLDOWN    <- 5L
+ENTRY_RATE_CAP    <- 0.10   # max new firms per period as fraction of N_HH
+ENTRY_COOLDOWN    <- 1L
 # ----- Firm exit rule ---------------------------------------------------
 # 1. Cash illiquidity: f_M - f_L ≤ 0
 #    Cash minus loan obligations ≤ 0. Inventory excluded (illiquid, price-distorted).
@@ -131,9 +192,9 @@ ENTRY_COOLDOWN    <- 5L
 #    is mechanically insolvent from birth (f_M - f_L ≤ 0 after paying
 #    wages with zero revenue) and is killed before WIP ever matures.
 #    See Hall & Lerner (2010) on startup runway periods.
-CLOSURE_GRACE     <- 3L      # periods before closure rule applies
-ALPHA_PROF        <- 0.10   # EWMA weight (~4-period memory)
-LOSS_MULT         <- 0.2    # close if smoothed loss > 20% of wage bill
+CLOSURE_GRACE     <- 5L      # periods before closure rule applies
+ALPHA_PROF        <- 0.25   # EWMA weight (~4-period memory)
+LOSS_MULT         <- 0.4    # close if smoothed loss > 40% of wage bill (from 20)
 BETA_SAT          <- -0.06 #CHANGED FROM -0.05
 SIGMA_W           <-  0.10
 SAT_RADIUS        <-  10000
@@ -405,7 +466,7 @@ cat(sprintf("  %d HH placed.\n", N_HH))
 N_SLOTS <- N_HH
 N_SLOTS_0 <- N_SLOTS
 
-hh_M          <- pmax(rnorm(N_HH, 150, 50), 0)
+hh_M          <- pmax(rnorm(N_HH, 60, 15), 0)
 hh_L          <- numeric(N_HH)
 hh_Employed   <- integer(N_HH)     # 0 = unemployed; else 1-based FirmID
 hh_Wage       <- numeric(N_HH)
@@ -565,7 +626,8 @@ entry_cooldown_t <- 0L   # counts down after a mass-entry episode
 # -�--�- History -�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�-
 hist_keys <- c("unemp","wage","price","gdp","hM","fM","rw","gini_hh",
                "total_loans","n_open","n_vacant","n_openings","n_exits",
-               "lg_M","lg_L","lg_tax","lg_transfer","lg_deficit","lg_interest",
+               "lg_M","lg_L","lg_tax","lg_transfer","lg_deficit","lg_interest","lg_debt_repay",
+               "g_share_current","gov_transf_t",
                "owner_pay_total","m_dist_total","n_transfer_recip","transfer_total",
                "mean_M_bot30","mean_M_top30","median_wage_t","income_thresh_t",
                "supply","nom_demand","real_demand","unmet_nom",
@@ -591,6 +653,19 @@ px_prev_pi  <- 1.0
 # Updated every period regardless of FISCAL_STABILIZER toggle so the
 # smoothed series is always available for diagnostics.
 tax_rev_smooth <- 0
+
+# Bolsa Família inflation correction state — price index at last uprating.
+# Initialised to 1.0 (base period). Resets to current price_index each time
+# a correction fires. Used to compute cumulative inflation since last update.
+bf_last_pi <- 1.0
+
+# Endogenous G_SHARE state — updated every period inside the loop.
+G_SHARE    <- G_SHARE_INIT
+# Target cash buffer: expected transfer bill at ~20% qualifying rate × multiplier.
+# Expressed as a fixed monetary target so it doesn't shift with N_HH dynamics.
+LG_M_TARGET <- GOV_TRANSF * N_HH * 0.15 * M_LG_TARGET_MULT
+cat(sprintf("Fiscal targets: LG_M_TARGET=%.0f, G_SHARE_INIT=%.2f [%.2f, %.2f]\n",
+            LG_M_TARGET, G_SHARE_INIT, G_SHARE_MIN, G_SHARE_MAX))
 
 # ----- Banking sector state (endogenous money) ---------------------------
 # bank_NW = bank net worth (equity). Primary state variable.
@@ -870,7 +945,7 @@ for (period in seq_len(MAXT)) {
     mean_hh_M   <- max(mean(hh_M), MIN_WAGE, na.rm = TRUE)
     SC_fallback <- max(mean_hh_M * SC_WEALTH_FRAC, SC_FLOOR)
     SC_target   <- if (length(open_wages) > 0 && length(open_N) > 0)
-      mean(open_wages) * pmax(mean(open_N)*0.2, 1)
+      mean(open_wages) * pmax(mean(open_N)*0.6, 1)
     else
       SC_fallback
     SC_target <- max(SC_target, SC_fallback, SC_FLOOR, na.rm = TRUE)
@@ -878,13 +953,15 @@ for (period in seq_len(MAXT)) {
     STARTUP_CAPITAL <- 0.5 * STARTUP_CAPITAL + 0.5 * SC_target
   }
   
-  # -�--�- GOV_TRANSF update (before labour market so quit decisions use
-  #    current-period transfer as reservation wage) -�--�--�--�--�--�--�--�--�--�--�--�--�--�-
+  # ----- GOV_TRANSF: fixed nominal; WEALTH_FLOOR tracks median wage ----------
+  # GOV_TRANSF is NOT updated here — nominal value is set by the periodic
+  # inflation correction rule (after price_index is computed, block K).
+  # WEALTH_FLOOR still tracks median wages to preserve the eligibility logic:
+  # households below BF_WEALTH_FRAC × median_wage qualify for transfers.
   {
-    emp_wages_pre  <- hh_Wage[hh_Employed != 0L]
+    emp_wages_pre   <- hh_Wage[hh_Employed != 0L]
     median_wage_pre <- if (length(emp_wages_pre) > 0) median(emp_wages_pre) else MIN_WAGE
-    GOV_TRANSF  <- max(BF_MEDIAN_FRAC * median_wage_pre, MIN_WAGE)
-    WEALTH_FLOOR <- max(BF_WEALTH_FRAC * median_wage_pre, GOV_TRANSF * 6)
+    WEALTH_FLOOR    <- max(BF_WEALTH_FRAC * median_wage_pre, GOV_TRANSF * 6)
   }
   
   
@@ -1319,11 +1396,16 @@ for (period in seq_len(MAXT)) {
     if (shortfall > 0) f_L[fi] <- f_L[fi] + shortfall  # capitalised interest
   }
 
-  # Bank dividends — distribute net interest income to HH every period
-  # bank_profit = loan interest received - deposit interest paid
+  # Bank dividends — distribute net interest income to HH every period.
+  # bank_profit = loan interest received - deposit interest paid.
   # (bad debt already hit bank_NW in closure block A)
-  bank_profit_period  <- bank_loan_int_total - bank_dep_int_total
-  bank_dividend_period <- max(0, bank_profit_period) * BANK_DIV_RATE
+  # Dividend suspension: if bank_NW < BANK_NW_FLOOR, full profit is retained
+  # to rebuild equity (Basel III Pillar 2 supervisory logic; see BCBS 2011).
+  # When bank_NW >= BANK_NW_FLOOR, BANK_DIV_RATE fraction is paid out.
+  bank_profit_period   <- bank_loan_int_total - bank_dep_int_total
+  bank_dividend_period <- if (bank_NW >= BANK_NW_FLOOR) {
+    max(0, bank_profit_period) * BANK_DIV_RATE
+  } else 0
   if (bank_dividend_period > 0 && N_HH > 0) {
     hh_M    <- hh_M + bank_dividend_period / N_HH   # deposit liability ↑
     bank_NW <- bank_NW - bank_dividend_period        # equity ↓
@@ -1368,6 +1450,15 @@ for (period in seq_len(MAXT)) {
   g_n_firms_served <- 0L
 
   if (length(openidx) > 0) {
+    # ----- Endogenous G_SHARE update (stock-flow norm) ----------------------
+    # Adjust G_SHARE toward the cash buffer target before computing the budget.
+    # Division by (tax_rev_smooth + 1) keeps the adjustment scale-invariant:
+    # a given cash surplus triggers a proportional spending response regardless
+    # of the absolute revenue level. Guard against tax_rev_smooth = 0 at t=1.
+    LG_M_TARGET <- GOV_TRANSF * N_HH * 0.15 * M_LG_TARGET_MULT
+    g_share_adj <- G_SHARE_PHI * (lg$M - LG_M_TARGET) / (tax_rev_smooth + 1)
+    G_SHARE     <- clamp(G_SHARE + g_share_adj, G_SHARE_MIN, G_SHARE_MAX)
+
     gov_budget <- if (FISCAL_STABILIZER) {
       G_SHARE * tax_rev_smooth
     } else {
@@ -1416,7 +1507,19 @@ for (period in seq_len(MAXT)) {
     }
   }
   lg$deficit <- transfer_bill + lg_int + lg_g_spend - lg_tax_now
-  
+
+  # ----- Sovereign debt repayment (SFC-consistent) -------------------------
+  # Triggered only when lg$M exceeds the cash floor, so the stabiliser
+  # retains full capacity in downturns (repayment halts when lg$M is tight).
+  # Repayment destroys money symmetrically: lg$M ↓, lg$L ↓ by equal amount.
+  # bank_R = bank_NW + deposits - loans is unchanged (both sides shrink).
+  lg_debt_repay <- 0
+  if (lg$L > 0 && lg$M > LG_DEBT_FLOOR) {
+    lg_debt_repay <- min(LG_AMORT_RATE * lg$L, lg$M - LG_DEBT_FLOOR)
+    lg$M <- lg$M - lg_debt_repay
+    lg$L <- lg$L - lg_debt_repay
+  }
+
   # Fiscal EWMA update — smooths tax revenue for fiscal stabiliser.
   # Updated every period regardless of FISCAL_STABILIZER toggle.
   # alpha = 1/FISCAL_EWMA_TAU; warm-up from 0 during burn-in.
@@ -1454,6 +1557,9 @@ for (period in seq_len(MAXT)) {
   hist[period, "lg_transfer"]    <- lg$transfer
   hist[period, "lg_deficit"]     <- lg$deficit
   hist[period, "lg_interest"]    <- lg$interest
+  hist[period, "lg_debt_repay"]  <- lg_debt_repay
+  hist[period, "g_share_current"]<- G_SHARE
+  hist[period, "gov_transf_t"]   <- GOV_TRANSF
   hist[period, "owner_pay_total"]<- total_owner_pay
   hist[period, "m_dist_total"]   <- total_m_dist
   hist[period, "n_transfer_recip"]<- n_qual
@@ -1493,6 +1599,24 @@ for (period in seq_len(MAXT)) {
   
   inflation <- (price_index / max(px_prev_pi, 1e-9) - 1) * 100
   px_prev_pi <- price_index
+
+  # ----- GOV_TRANSF inflation correction (periodic, upward only) -----------
+  # Fires every BF_INFL_FREQ periods. Computes cumulative inflation since
+  # bf_last_pi. If positive, uprates by BF_INFL_PASSTHRU fraction.
+  # Nominal transfer never falls below GOV_TRANSF_BASE (downward rigidity).
+  # SFC note: higher GOV_TRANSF increases transfer_bill → lg$M ↓ → may
+  # trigger lg$L ↑ in deficit periods; this is the correct fiscal response
+  # to a real transfer uprating (government borrows to maintain real support).
+  if (period %% BF_INFL_FREQ == 0L && period > BF_INFL_FREQ) {
+    cumul_infl <- price_index / max(bf_last_pi, 1e-9) - 1
+    if (cumul_infl > 0) {
+      GOV_TRANSF <- max(GOV_TRANSF * (1 + BF_INFL_PASSTHRU * cumul_infl),
+                        GOV_TRANSF_BASE)
+      bf_last_pi <- price_index   # reset anchor to current price level
+      cat(sprintf("  [BF correction t=%d] cumul_infl=%.2f%%  GOV_TRANSF → %.3f\n",
+                  period, cumul_infl * 100, GOV_TRANSF))
+    }
+  }
   
   hist[period, "price_index"]     <- price_index
   hist[period, "inflation"]       <- inflation

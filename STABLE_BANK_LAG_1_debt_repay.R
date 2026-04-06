@@ -30,7 +30,7 @@ MAXT          <- 300
 # N_HH is updated dynamically; all HH arrays grow accordingly.
 # Set POP_GROWTH_RATE <- 0 to disable without changing anything else.
 GOV_TRANSF    <- 5
-POP_GROWTH_RATE  <- 0.000        # ~0.1% per period
+POP_GROWTH_RATE  <- 0.001        # ~0.1% per period
 # SFC birth endowment: each parent transfers HERITAGE_FRAC of their wealth.
 # Total endowment = 2 * HERITAGE_FRAC * mean(parental wealth).
 # Government tops up to POP_WEALTH_FLOOR if combined transfer is too small.
@@ -103,6 +103,21 @@ BF_WEALTH_FRAC  <- 4.00    # wealth floor = 4x median wage
 FISCAL_STABILIZER <- TRUE
 G_SHARE           <- 0.3
 FISCAL_EWMA_TAU   <- 20    # smoothing horizon (periods); alpha = 1/tau
+# ----- Sovereign debt repayment rule ---------------------------------------
+# When lg$M exceeds LG_DEBT_FLOOR, the government retires a fraction
+# LG_AMORT_RATE of outstanding lg$L each period (smooth amortisation).
+# SFC mechanics: lg$M ↓, lg$L ↓ by equal amount → money destroyed,
+# bank_R and bank_NW unchanged (symmetric balance sheet contraction).
+# This prevents lg$L from accumulating without bound under chronic deficits
+# while preserving countercyclical capacity: in downturns lg$M falls below
+# LG_DEBT_FLOOR, repayment halts, and the stabiliser operates freely.
+# LG_DEBT_FLOOR: minimum cash buffer (one period's transfer bill at ~20%
+#   qualifying rate; keeps the government solvent through spending peaks).
+# LG_AMORT_RATE: fraction of lg$L retired per period when funded (2-5%).
+#   At 0.02, a debt stock of 300k shrinks by ~6k/period when surpluses allow.
+#   Interpretable as a fiscal sustainability parameter for Monte Carlo design.
+LG_DEBT_FLOOR  <- GOV_TRANSF * N_HH * 0.25   # ~25% of max transfer bill
+LG_AMORT_RATE  <- 0.02                         # 2% of outstanding debt/period
 
 STARTUP_CAPITAL   <- 15
 SC_WEALTH_FRAC    <- 0.15   # was 0.50 — entry barrier at 25% of mean hH wealth
@@ -140,7 +155,7 @@ SAT_RADIUS        <-  10000
 OWNER_PROFIT_SHARE <- 0.40
 M_DIST_RATE       <- 0.2
 M_DIST_PERIOD     <- 12L
-getwd()
+
 # ----- TFP: passive learning-by-doing (Arrow 1962) ----------------------
 # Each open firm gains LBD_RATE per period (idiosyncratic noise LBD_SIGMA).
 # New entrants always start at f_a = 1.0 (frontier technology).
@@ -565,7 +580,7 @@ entry_cooldown_t <- 0L   # counts down after a mass-entry episode
 # -�--�- History -�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�-
 hist_keys <- c("unemp","wage","price","gdp","hM","fM","rw","gini_hh",
                "total_loans","n_open","n_vacant","n_openings","n_exits",
-               "lg_M","lg_L","lg_tax","lg_transfer","lg_deficit","lg_interest",
+               "lg_M","lg_L","lg_tax","lg_transfer","lg_deficit","lg_interest","lg_debt_repay",
                "owner_pay_total","m_dist_total","n_transfer_recip","transfer_total",
                "mean_M_bot30","mean_M_top30","median_wage_t","income_thresh_t",
                "supply","nom_demand","real_demand","unmet_nom",
@@ -1416,7 +1431,19 @@ for (period in seq_len(MAXT)) {
     }
   }
   lg$deficit <- transfer_bill + lg_int + lg_g_spend - lg_tax_now
-  
+
+  # ----- Sovereign debt repayment (SFC-consistent) -------------------------
+  # Triggered only when lg$M exceeds the cash floor, so the stabiliser
+  # retains full capacity in downturns (repayment halts when lg$M is tight).
+  # Repayment destroys money symmetrically: lg$M ↓, lg$L ↓ by equal amount.
+  # bank_R = bank_NW + deposits - loans is unchanged (both sides shrink).
+  lg_debt_repay <- 0
+  if (lg$L > 0 && lg$M > LG_DEBT_FLOOR) {
+    lg_debt_repay <- min(LG_AMORT_RATE * lg$L, lg$M - LG_DEBT_FLOOR)
+    lg$M <- lg$M - lg_debt_repay
+    lg$L <- lg$L - lg_debt_repay
+  }
+
   # Fiscal EWMA update — smooths tax revenue for fiscal stabiliser.
   # Updated every period regardless of FISCAL_STABILIZER toggle.
   # alpha = 1/FISCAL_EWMA_TAU; warm-up from 0 during burn-in.
@@ -1454,6 +1481,7 @@ for (period in seq_len(MAXT)) {
   hist[period, "lg_transfer"]    <- lg$transfer
   hist[period, "lg_deficit"]     <- lg$deficit
   hist[period, "lg_interest"]    <- lg$interest
+  hist[period, "lg_debt_repay"]  <- lg_debt_repay
   hist[period, "owner_pay_total"]<- total_owner_pay
   hist[period, "m_dist_total"]   <- total_m_dist
   hist[period, "n_transfer_recip"]<- n_qual

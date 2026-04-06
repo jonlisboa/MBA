@@ -77,8 +77,17 @@ RD               <- 0.001    # deposit interest rate (per period)
 CAR_MIN          <- 0.08     # minimum capital adequacy ratio (Basel-like)
 LOAN_MATURITY    <- 30L      # amortisation horizon (periods to full repayment)
 STARTUP_LEVERAGE <- 1.0      # bank matches owner equity 1:1 at entry
-BANK_NW_INIT_MULT <- 3.0    # initial bank_NW = mult * N_SEED * STARTUP_CAPITAL
-BANK_DIV_RATE    <- 0.50     # fraction of period net interest income distributed
+BANK_NW_INIT_MULT <- 10    # initial bank_NW = mult * N_SEED * STARTUP_CAPITAL
+BANK_DIV_RATE    <- 0.1     # fraction of period net interest income distributed
+# Minimum bank equity before dividends are suspended.
+# Below this threshold the bank retains all profit to rebuild capital,
+# mimicking Basel III Pillar 2 supervisory dividend restrictions.
+# At BANK_NW_FLOOR=0, dividends are always paid (original behaviour).
+# BANK_NW_FLOOR is a clean Monte Carlo treatment variable: higher values
+# make the bank more conservative, build equity faster, and widen the
+# CAR lending headroom — at the cost of lower household dividend income.
+# Rule of thumb: set to ~10% of mean outstanding firm loans.
+BANK_NW_FLOOR    <- 2500     # suspend dividends if bank_NW falls below this
 PAYROLL_TAX   <- 0.10
 PROFIT_TAX    <- 0.27
 WEALTH_FLOOR  <- 10        # overridden dynamically each period
@@ -101,8 +110,23 @@ BF_WEALTH_FRAC  <- 4.00    # wealth floor = 4x median wage
 # G_SHARE and FISCAL_EWMA_TAU are shared across both modes.
 # Toggle is a clean treatment variable for Monte Carlo factorial design.
 FISCAL_STABILIZER <- TRUE
-G_SHARE           <- 0.3
+G_SHARE           <- 0.80
 FISCAL_EWMA_TAU   <- 20    # smoothing horizon (periods); alpha = 1/tau
+# ----- Sovereign debt repayment rule ---------------------------------------
+# When lg$M exceeds LG_DEBT_FLOOR, the government retires a fraction
+# LG_AMORT_RATE of outstanding lg$L each period (smooth amortisation).
+# SFC mechanics: lg$M ↓, lg$L ↓ by equal amount → money destroyed,
+# bank_R and bank_NW unchanged (symmetric balance sheet contraction).
+# This prevents lg$L from accumulating without bound under chronic deficits
+# while preserving countercyclical capacity: in downturns lg$M falls below
+# LG_DEBT_FLOOR, repayment halts, and the stabiliser operates freely.
+# LG_DEBT_FLOOR: minimum cash buffer (one period's transfer bill at ~20%
+#   qualifying rate; keeps the government solvent through spending peaks).
+# LG_AMORT_RATE: fraction of lg$L retired per period when funded (2-5%).
+#   At 0.02, a debt stock of 300k shrinks by ~6k/period when surpluses allow.
+#   Interpretable as a fiscal sustainability parameter for Monte Carlo design.
+LG_DEBT_FLOOR  <- GOV_TRANSF * N_HH * 0.25   # ~25% of max transfer bill
+LG_AMORT_RATE  <- 0.02                         # 2% of outstanding debt/period
 
 STARTUP_CAPITAL   <- 15
 SC_WEALTH_FRAC    <- 0.15   # was 0.50 — entry barrier at 25% of mean hH wealth
@@ -405,7 +429,7 @@ cat(sprintf("  %d HH placed.\n", N_HH))
 N_SLOTS <- N_HH
 N_SLOTS_0 <- N_SLOTS
 
-hh_M          <- pmax(rnorm(N_HH, 150, 50), 0)
+hh_M          <- pmax(rnorm(N_HH, 30, 5), 0) #STARTING hh_M
 hh_L          <- numeric(N_HH)
 hh_Employed   <- integer(N_HH)     # 0 = unemployed; else 1-based FirmID
 hh_Wage       <- numeric(N_HH)
@@ -565,7 +589,7 @@ entry_cooldown_t <- 0L   # counts down after a mass-entry episode
 # -�--�- History -�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�--�-
 hist_keys <- c("unemp","wage","price","gdp","hM","fM","rw","gini_hh",
                "total_loans","n_open","n_vacant","n_openings","n_exits",
-               "lg_M","lg_L","lg_tax","lg_transfer","lg_deficit","lg_interest",
+               "lg_M","lg_L","lg_tax","lg_transfer","lg_deficit","lg_interest","lg_debt_repay",
                "owner_pay_total","m_dist_total","n_transfer_recip","transfer_total",
                "mean_M_bot30","mean_M_top30","median_wage_t","income_thresh_t",
                "supply","nom_demand","real_demand","unmet_nom",
@@ -1319,11 +1343,16 @@ for (period in seq_len(MAXT)) {
     if (shortfall > 0) f_L[fi] <- f_L[fi] + shortfall  # capitalised interest
   }
 
-  # Bank dividends — distribute net interest income to HH every period
-  # bank_profit = loan interest received - deposit interest paid
+  # Bank dividends — distribute net interest income to HH every period.
+  # bank_profit = loan interest received - deposit interest paid.
   # (bad debt already hit bank_NW in closure block A)
-  bank_profit_period  <- bank_loan_int_total - bank_dep_int_total
-  bank_dividend_period <- max(0, bank_profit_period) * BANK_DIV_RATE
+  # Dividend suspension: if bank_NW < BANK_NW_FLOOR, full profit is retained
+  # to rebuild equity (Basel III Pillar 2 supervisory logic; see BCBS 2011).
+  # When bank_NW >= BANK_NW_FLOOR, BANK_DIV_RATE fraction is paid out.
+  bank_profit_period   <- bank_loan_int_total - bank_dep_int_total
+  bank_dividend_period <- if (bank_NW >= BANK_NW_FLOOR) {
+    max(0, bank_profit_period) * BANK_DIV_RATE
+  } else 0
   if (bank_dividend_period > 0 && N_HH > 0) {
     hh_M    <- hh_M + bank_dividend_period / N_HH   # deposit liability ↑
     bank_NW <- bank_NW - bank_dividend_period        # equity ↓
@@ -1416,7 +1445,19 @@ for (period in seq_len(MAXT)) {
     }
   }
   lg$deficit <- transfer_bill + lg_int + lg_g_spend - lg_tax_now
-  
+
+  # ----- Sovereign debt repayment (SFC-consistent) -------------------------
+  # Triggered only when lg$M exceeds the cash floor, so the stabiliser
+  # retains full capacity in downturns (repayment halts when lg$M is tight).
+  # Repayment destroys money symmetrically: lg$M ↓, lg$L ↓ by equal amount.
+  # bank_R = bank_NW + deposits - loans is unchanged (both sides shrink).
+  lg_debt_repay <- 0
+  if (lg$L > 0 && lg$M > LG_DEBT_FLOOR) {
+    lg_debt_repay <- min(LG_AMORT_RATE * lg$L, lg$M - LG_DEBT_FLOOR)
+    lg$M <- lg$M - lg_debt_repay
+    lg$L <- lg$L - lg_debt_repay
+  }
+
   # Fiscal EWMA update — smooths tax revenue for fiscal stabiliser.
   # Updated every period regardless of FISCAL_STABILIZER toggle.
   # alpha = 1/FISCAL_EWMA_TAU; warm-up from 0 during burn-in.
@@ -1454,6 +1495,7 @@ for (period in seq_len(MAXT)) {
   hist[period, "lg_transfer"]    <- lg$transfer
   hist[period, "lg_deficit"]     <- lg$deficit
   hist[period, "lg_interest"]    <- lg$interest
+  hist[period, "lg_debt_repay"]  <- lg_debt_repay
   hist[period, "owner_pay_total"]<- total_owner_pay
   hist[period, "m_dist_total"]   <- total_m_dist
   hist[period, "n_transfer_recip"]<- n_qual
