@@ -53,7 +53,7 @@ BF_MODE          <- "fixed"
 GOV_TRANSF_BASE  <- 5
 BF_INFL_PASSTHRU <- 0.50
 BF_INFL_FREQ     <- 12L
-POP_GROWTH_RATE  <- 0.000
+POP_GROWTH_RATE  <- 0.001
 HERITAGE_FRAC    <- 0.10
 POP_WEALTH_FLOOR <- GOV_TRANSF
 
@@ -76,13 +76,13 @@ A2            <- 0.8
 
 # Banking (Godley & Lavoie 2007, endogenous money)
 RL_FIRM          <- 0.006
-RD               <- 0.002
+RD               <- 0.0025
 CAR_MIN          <- 0.08
 LOAN_MATURITY    <- 50L
 STARTUP_LEVERAGE <- 0.2
 BANK_NW_INIT_MULT <- 20
 BANK_DIV_RATE    <- 0.2
-BANK_NW_FLOOR    <- 5000
+BANK_NW_FLOOR    <- 2500
 
 # Taxes & distribution
 PAYROLL_TAX   <- 0.10
